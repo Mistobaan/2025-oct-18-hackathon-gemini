@@ -1,21 +1,40 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+function fileToGenerativePart(image: string, mimeType: string): Part {
+  return {
+    inlineData: {
+      data: image.split(',')[1],
+      mimeType,
+    },
+  };
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { strokes } = body;
+    const { image } = body;
 
-    if (!strokes || !Array.isArray(strokes) || strokes.length === 0) {
-      return NextResponse.json({ error: 'Invalid strokes data' }, { status: 400 });
+    if (!image || typeof image !== 'string') {
+      return NextResponse.json({ error: 'Invalid image data' }, { status: 400 });
     }
 
-    // In the future, this is where we will send the strokes to the Gemini API
-    console.log('Received strokes on the backend:', JSON.stringify(strokes, null, 2));
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    // For now, return a dummy LaTeX response
-    const dummyLatex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+    const imagePart = fileToGenerativePart(image, 'image/png');
 
-    return NextResponse.json({ latex: dummyLatex });
+    const prompt = 'Recognize the mathematical equation in this image and return only the LaTeX representation of it. Do not include any other text or explanations.';
+
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const text = response.text();
+
+    // Clean up the response to ensure it's valid LaTeX
+    const latex = text.replace(/```latex/g, '').replace(/```/g, '').trim();
+
+    return NextResponse.json({ latex });
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

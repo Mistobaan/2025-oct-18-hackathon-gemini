@@ -70,7 +70,7 @@ export default function Home() {
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="flex flex-col gap-8">
           <Step number={1} title="Draw & Recognize" active={currentStep === 1}>
-            <DrawingCanvas transcript={transcript} onLatexRecognized={handleLatexRecognized} />
+            <DrawingCanvas onLatexRecognized={handleLatexRecognized} />
           </Step>
           <Step number={2} title="Explain the Equation" active={currentStep === 2}>
             <SpeechRecognition onTranscriptUpdate={setTranscript} disabled={!isRecognized} />
