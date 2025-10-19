@@ -34,6 +34,7 @@ type SymbolResult = {
   id: string;
   latex: string;
   status: SymbolStatus;
+  imageDataUrl: string;
 };
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
@@ -55,6 +56,9 @@ function App() {
   const [symbolError, setSymbolError] = useState<string | null>(null);
   const [isExtractingSymbols, setIsExtractingSymbols] = useState(false);
   const extractionTaskRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [copiedSymbolId, setCopiedSymbolId] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
 
   const recognizeLatex = useMemo(
     () =>
@@ -69,10 +73,50 @@ function App() {
 
   const clearSymbols = useCallback(() => {
     extractionTaskRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    if (copyTimeoutRef.current !== null) {
+      window.clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
     setIsExtractingSymbols(false);
     setSymbolResults([]);
     setSymbolError(null);
+    setCopiedSymbolId(null);
   }, []);
+
+  const handleCopyLatex = useCallback(
+    async (result: SymbolResult) => {
+      if (!result.latex) {
+        return;
+      }
+
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+        setSymbolError((prev) =>
+          prev ?? "Clipboard access is not available in this browser."
+        );
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(result.latex);
+        setCopiedSymbolId(result.id);
+        if (copyTimeoutRef.current !== null) {
+          window.clearTimeout(copyTimeoutRef.current);
+        }
+        copyTimeoutRef.current = window.setTimeout(() => {
+          setCopiedSymbolId(null);
+          copyTimeoutRef.current = null;
+        }, 1800);
+      } catch (error) {
+        console.error("Failed to copy LaTeX symbol", error);
+        setSymbolError((prev) =>
+          prev ?? "Unable to copy LaTeX to the clipboard. Check browser permissions and try again."
+        );
+      }
+    },
+    []
+  );
 
   const handleSymbolExtraction = useCallback(async () => {
     const video = videoRef.current;
@@ -86,26 +130,35 @@ function App() {
       return;
     }
 
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const capture: SymbolExtractionResult = extractSymbolsFromVideo(video, {
       maxSymbols: 12,
       padding: 6,
     });
 
     if (!capture.symbolDataUrls.length) {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setSymbolResults([]);
       setSymbolError("No symbols detected in the current frame.");
       return;
     }
 
     setSymbolError(null);
+    setCopiedSymbolId(null);
     setIsExtractingSymbols(true);
     const taskId = extractionTaskRef.current + 1;
     extractionTaskRef.current = taskId;
 
-    const initialResults: SymbolResult[] = capture.symbolDataUrls.map((_, index) => ({
+    const initialResults: SymbolResult[] = capture.symbolDataUrls.map((dataUrl, index) => ({
       id: `${taskId}-${index}`,
       latex: "",
       status: "pending",
+      imageDataUrl: dataUrl,
     }));
     setSymbolResults(initialResults);
 
@@ -113,64 +166,73 @@ function App() {
     let lastErrorMessage: string | null = null;
 
     try {
-      for (let index = 0; index < capture.symbolDataUrls.length; index += 1) {
-        const dataUrl = capture.symbolDataUrls[index];
-        if (!dataUrl) {
-          encounteredError = true;
-          setSymbolResults((prev) => {
-            const next = [...prev];
-            if (!next[index]) {
-              return prev;
-            }
-            next[index] = { ...next[index], latex: "", status: "error" };
-            return next;
-          });
-          continue;
-        }
-
-        try {
-          const latex = await recognizeLatex(dataUrl);
-          if (extractionTaskRef.current !== taskId) {
-            return;
-          }
-          setSymbolResults((prev) => {
-            const next = [...prev];
-            if (!next[index]) {
-              return prev;
-            }
-            const normalizedLatex = latex.trim();
-            next[index] = {
-              ...next[index],
-              latex: normalizedLatex,
-              status: normalizedLatex ? "success" : "error",
-            };
-            return next;
-          });
-          if (!latex.trim()) {
+      const recognitionTasks = capture.symbolDataUrls.map((dataUrl, index) =>
+        (async () => {
+          if (!dataUrl) {
             encounteredError = true;
-          }
-        } catch (error) {
-          console.error("Failed to transcribe symbol", error);
-          encounteredError = true;
-          if (!lastErrorMessage) {
-            lastErrorMessage =
-              error instanceof Error ? error.message : "Unknown transcription error";
-          }
-          if (extractionTaskRef.current !== taskId) {
+            if (extractionTaskRef.current !== taskId || controller.signal.aborted) {
+              return;
+            }
+            setSymbolResults((prev) => {
+              const next = [...prev];
+              if (!next[index]) {
+                return prev;
+              }
+              next[index] = { ...next[index], latex: "", status: "error" };
+              return next;
+            });
             return;
           }
-          setSymbolResults((prev) => {
-            const next = [...prev];
-            if (!next[index]) {
-              return prev;
-            }
-            next[index] = { ...next[index], latex: "", status: "error" };
-            return next;
-          });
-        }
-      }
 
-      if (extractionTaskRef.current !== taskId) {
+          try {
+            const latex = await recognizeLatex(dataUrl, { signal: controller.signal });
+            if (extractionTaskRef.current !== taskId || controller.signal.aborted) {
+              return;
+            }
+            setSymbolResults((prev) => {
+              const next = [...prev];
+              if (!next[index]) {
+                return prev;
+              }
+              const normalizedLatex = latex.trim();
+              next[index] = {
+                ...next[index],
+                latex: normalizedLatex,
+                status: normalizedLatex ? "success" : "error",
+              };
+              if (!normalizedLatex) {
+                encounteredError = true;
+              }
+              return next;
+            });
+          } catch (error) {
+            if (controller.signal.aborted) {
+              return;
+            }
+            console.error("Failed to transcribe symbol", error);
+            encounteredError = true;
+            if (!lastErrorMessage) {
+              lastErrorMessage =
+                error instanceof Error ? error.message : "Unknown transcription error";
+            }
+            if (extractionTaskRef.current !== taskId) {
+              return;
+            }
+            setSymbolResults((prev) => {
+              const next = [...prev];
+              if (!next[index]) {
+                return prev;
+              }
+              next[index] = { ...next[index], latex: "", status: "error" };
+              return next;
+            });
+          }
+        })()
+      );
+
+      await Promise.all(recognitionTasks);
+
+      if (extractionTaskRef.current !== taskId || controller.signal.aborted) {
         return;
       }
 
@@ -182,11 +244,24 @@ function App() {
         );
       }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       if (extractionTaskRef.current === taskId) {
         setIsExtractingSymbols(false);
       }
     }
   }, [recognizeLatex]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     clearSymbols();
@@ -220,6 +295,15 @@ function App() {
                     <ul className="symbol-results-list">
                       {symbolResults.map((result) => (
                         <li key={result.id} className={cn("symbol-results-item", result.status)}>
+                          {result.imageDataUrl ? (
+                            <img
+                              src={result.imageDataUrl}
+                              alt="Captured symbol"
+                              className="symbol-preview"
+                            />
+                          ) : (
+                            <span className="symbol-preview placeholder" aria-hidden="true" />
+                          )}
                           {result.status === "pending" && (
                             <span className="material-symbols-outlined">hourglass_empty</span>
                           )}
@@ -229,11 +313,29 @@ function App() {
                           {result.status === "success" && (
                             <span className="material-symbols-outlined">check_circle</span>
                           )}
-                          <code>
-                            {result.status === "pending"
-                              ? "Processing…"
-                              : result.latex || "No output"}
-                          </code>
+                          <div className="symbol-result-body">
+                            <code>
+                              {result.status === "pending"
+                                ? "Processing…"
+                                : result.latex || "No output"}
+                            </code>
+                            {result.status === "success" && result.latex && (
+                              <button
+                                type="button"
+                                className="symbol-copy-button"
+                                onClick={() => handleCopyLatex(result)}
+                                title="Copy LaTeX to clipboard"
+                                aria-label="Copy LaTeX to clipboard"
+                              >
+                                <span className="material-symbols-outlined">content_copy</span>
+                              </button>
+                            )}
+                          </div>
+                          {copiedSymbolId === result.id && (
+                            <span className="symbol-copy-feedback" role="status" aria-live="polite">
+                              Copied!
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>

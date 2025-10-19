@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-export type RecognizeLatexFn = (dataUrl: string) => Promise<string>;
+export type RecognizeLatexFn = (
+  dataUrl: string,
+  options?: {
+    signal?: AbortSignal;
+  }
+) => Promise<string>;
 
 export type LatexRecognizerOptions = {
   apiKey: string;
@@ -130,7 +135,8 @@ async function callGemini(
   apiKey: string,
   model: string,
   prompt: string,
-  imagePart: InlineDataPart
+  imagePart: InlineDataPart,
+  signal?: AbortSignal
 ): Promise<any> {
   const endpoint = new URL(
     `/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -151,6 +157,7 @@ async function callGemini(
         },
       ],
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -169,11 +176,11 @@ export function createLatexRecognizer({
   model = DEFAULT_MODEL,
   prompt = DEFAULT_PROMPT,
 }: LatexRecognizerOptions): RecognizeLatexFn {
-  return async (dataUrl: string): Promise<string> => {
+  return async (dataUrl: string, { signal }: { signal?: AbortSignal } = {}): Promise<string> => {
     const { base64Data, mimeType } = parseDataUrl(dataUrl);
     const imagePart = toGenerativePart(base64Data, mimeType);
 
-    const result = await callGemini(apiKey, model, prompt, imagePart);
+    const result = await callGemini(apiKey, model, prompt, imagePart, signal);
     const rawText = readTextFromResponse(result);
 
     return normalizeLatex(rawText);
