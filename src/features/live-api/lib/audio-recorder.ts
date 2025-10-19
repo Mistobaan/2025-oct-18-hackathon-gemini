@@ -20,7 +20,7 @@ import { createWorketFromSrc } from './audioworklet-registry';
 import { audioContext } from './utils';
 import AudioRecordingWorklet from './worklets/audio-processing';
 import VolMeterWorket from './worklets/vol-meter';
-import { TypedEventEmitter } from './typed-event-emitter';
+import { EventMap, TypedEventEmitter } from './typed-event-emitter';
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = '';
@@ -31,7 +31,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-export interface AudioRecorderEvents {
+export interface AudioRecorderEvents extends EventMap {
   data: (base64: string) => void;
   volume: (volume: number) => void;
 }
