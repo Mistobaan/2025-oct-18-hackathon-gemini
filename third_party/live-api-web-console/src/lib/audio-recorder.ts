@@ -19,7 +19,7 @@ import AudioRecordingWorklet from "./worklets/audio-processing";
 import VolMeterWorket from "./worklets/vol-meter";
 
 import { createWorketFromSrc } from "./audioworklet-registry";
-import EventEmitter from "eventemitter3";
+import { EventEmitter } from "eventemitter3";
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   var binary = "";
@@ -31,7 +31,12 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-export class AudioRecorder extends EventEmitter {
+export interface AudioRecorderEvents {
+  data: (base64: string) => void;
+  volume: (volume: number) => void;
+}
+
+export class AudioRecorder extends EventEmitter<AudioRecorderEvents> {
   stream: MediaStream | undefined;
   audioContext: AudioContext | undefined;
   source: MediaStreamAudioSourceNode | undefined;
@@ -107,5 +112,21 @@ export class AudioRecorder extends EventEmitter {
       return;
     }
     handleStop();
+  }
+
+  override on<Event extends keyof AudioRecorderEvents>(
+    event: Event,
+    listener: AudioRecorderEvents[Event]
+  ): this {
+    super.on(event, listener);
+    return this;
+  }
+
+  override off<Event extends keyof AudioRecorderEvents>(
+    event: Event,
+    listener: AudioRecorderEvents[Event]
+  ): this {
+    super.off(event, listener);
+    return this;
   }
 }
