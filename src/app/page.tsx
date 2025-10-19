@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DrawingCanvas from '@/components/drawing-canvas';
+import { GeminiLiveConsole } from '@/components/gemini-live-console';
 import LatexCanvas from '@/components/latex-canvas';
 import { useGeminiLive } from '@/hooks/use-gemini-live';
 
@@ -46,6 +47,9 @@ export default function Home() {
         <div className="flex flex-1 flex-col overflow-hidden px-6 pb-8 pt-3 sm:px-10">
           <DrawingCanvas onLatexRecognized={handleLatexRecognized} />
         </div>
+      </section>
+      <section className="flex w-full justify-center bg-slate-950/40 px-6 pb-12 pt-6 sm:px-10">
+        <GeminiLiveConsole className="w-full" />
       </section>
     </main>
   );

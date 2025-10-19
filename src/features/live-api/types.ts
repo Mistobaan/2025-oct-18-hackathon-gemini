@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 
-import type { ReportCallback } from "web-vitals";
+import type {
+  GoogleGenAIOptions,
+  LiveClientToolResponse,
+  LiveServerMessage,
+  Part,
+} from '@google/genai';
 
-const reportWebVitals = (onPerfEntry?: ReportCallback) => {
-  if (onPerfEntry && onPerfEntry instanceof Function) {
-    import("web-vitals").then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
-      onCLS(onPerfEntry);
-      onINP(onPerfEntry);
-      onFCP(onPerfEntry);
-      onLCP(onPerfEntry);
-      onTTFB(onPerfEntry);
-    });
-  }
+/** The options used when initialising the live client. */
+export type LiveClientOptions = GoogleGenAIOptions & { apiKey: string };
+
+export type StreamingLog = {
+  date: Date;
+  type: string;
+  count?: number;
+  message:
+    | string
+    | ClientContentLog
+    | Omit<LiveServerMessage, 'text' | 'data'>
+    | LiveClientToolResponse;
 };
 
-export default reportWebVitals;
+export type ClientContentLog = {
+  turns: Part[];
+  turnComplete: boolean;
+};

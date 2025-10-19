@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { useEffect, useRef, useState, memo } from "react";
-import vegaEmbed from "vega-embed";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import {
   FunctionDeclaration,
@@ -22,6 +21,67 @@ import {
   Modality,
   Type,
 } from "@google/genai";
+
+type VegaEmbed = (
+  element: HTMLElement,
+  spec: unknown,
+  options?: unknown
+) => Promise<unknown>;
+
+declare global {
+  interface Window {
+    vegaEmbed?: VegaEmbed;
+  }
+}
+
+const VEGA_EMBED_SRC =
+  "https://cdn.jsdelivr.net/npm/vega-embed@6/build/vega-embed.min.js";
+
+let vegaEmbedLoader: Promise<VegaEmbed | null> | null = null;
+
+const loadVegaEmbed = async (): Promise<VegaEmbed | null> => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  if (window.vegaEmbed) {
+    return window.vegaEmbed;
+  }
+
+  if (!vegaEmbedLoader) {
+    vegaEmbedLoader = new Promise<VegaEmbed | null>((resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        "script[data-vega-embed]"
+      );
+
+      if (existingScript && window.vegaEmbed) {
+        resolve(window.vegaEmbed);
+        return;
+      }
+
+      const script = existingScript ?? document.createElement("script");
+      script.src = VEGA_EMBED_SRC;
+      script.async = true;
+      script.dataset.vegaEmbed = "true";
+      script.onload = () => {
+        resolve(window.vegaEmbed ?? null);
+      };
+      script.onerror = () => {
+        reject(new Error("Failed to load vega-embed script"));
+      };
+
+      if (!existingScript) {
+        document.head.appendChild(script);
+      }
+    }).catch((error) => {
+      console.error(error);
+      vegaEmbedLoader = null;
+      return null;
+    });
+  }
+
+  return vegaEmbedLoader;
+};
 
 const declaration: FunctionDeclaration = {
   name: "render_altair",
@@ -41,6 +101,7 @@ const declaration: FunctionDeclaration = {
 
 function AltairComponent() {
   const [jsonString, setJSONString] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
   const { client, setConfig, setModel } = useLiveAPIContext();
 
   useEffect(() => {
@@ -102,12 +163,69 @@ function AltairComponent() {
   const embedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (embedRef.current && jsonString) {
-      console.log("jsonString", jsonString);
-      vegaEmbed(embedRef.current, JSON.parse(jsonString));
+    const element = embedRef.current;
+
+    if (!element) {
+      return;
     }
-  }, [embedRef, jsonString]);
-  return <div className="vega-embed" ref={embedRef} />;
+
+    element.innerHTML = "";
+
+    if (!jsonString) {
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    setError(null);
+
+    loadVegaEmbed()
+      .then((embed) => {
+        if (!embed || cancelled) {
+          if (!cancelled) {
+            setError("Altair rendering is unavailable.");
+          }
+          return;
+        }
+
+        let parsed: unknown;
+
+        try {
+          parsed = JSON.parse(jsonString);
+        } catch (parseError) {
+          console.error(parseError);
+          if (!cancelled) {
+            setError("Unable to parse Altair chart specification.");
+          }
+          return;
+        }
+
+        embed(element, parsed).catch((embedError) => {
+          console.error(embedError);
+          if (!cancelled) {
+            setError("Unable to render Altair chart.");
+          }
+        });
+      })
+      .catch((loaderError) => {
+        console.error(loaderError);
+        if (!cancelled) {
+          setError("Unable to load chart renderer.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [jsonString]);
+
+  return (
+    <div className="vega-embed" aria-live="polite">
+      {error ? <p>{error}</p> : null}
+      <div ref={embedRef} />
+    </div>
+  );
 }
 
 export const Altair = memo(AltairComponent);

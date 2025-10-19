@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Copyright 2024 Google LLC
  *
@@ -14,18 +16,18 @@
  * limitations under the License.
  */
 
-import type { ReportCallback } from "web-vitals";
-
-const reportWebVitals = (onPerfEntry?: ReportCallback) => {
-  if (onPerfEntry && onPerfEntry instanceof Function) {
-    import("web-vitals").then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
-      onCLS(onPerfEntry);
-      onINP(onPerfEntry);
-      onFCP(onPerfEntry);
-      onLCP(onPerfEntry);
-      onTTFB(onPerfEntry);
-    });
-  }
+export type WorkletGraph = {
+  node?: AudioWorkletNode;
+  handlers: Array<(this: MessagePort, ev: MessageEvent) => void>;
 };
 
-export default reportWebVitals;
+export const registeredWorklets: Map<AudioContext, Record<string, WorkletGraph>> =
+  new Map();
+
+export const createWorketFromSrc = (workletName: string, workletSrc: string) => {
+  const script = new Blob([`registerProcessor("${workletName}", ${workletSrc})`], {
+    type: 'application/javascript',
+  });
+
+  return URL.createObjectURL(script);
+};
