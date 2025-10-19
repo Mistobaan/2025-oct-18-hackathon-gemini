@@ -29,9 +29,9 @@ import {
 } from '@google/genai';
 import { LiveClientOptions, StreamingLog } from '../types';
 import { base64ToArrayBuffer } from './utils';
-import { TypedEventEmitter } from './typed-event-emitter';
+import { EventMap, TypedEventEmitter } from './typed-event-emitter';
 
-export interface LiveClientEventTypes {
+export interface LiveClientEventTypes extends EventMap {
   audio: (data: ArrayBuffer) => void;
   close: (event: CloseEvent) => void;
   content: (data: LiveServerContent) => void;
