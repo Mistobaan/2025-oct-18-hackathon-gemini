@@ -113,20 +113,4 @@ export class AudioRecorder extends EventEmitter<AudioRecorderEvents> {
     }
     handleStop();
   }
-
-  override on<Event extends keyof AudioRecorderEvents>(
-    event: Event,
-    listener: AudioRecorderEvents[Event]
-  ): this {
-    super.on(event, listener);
-    return this;
-  }
-
-  override off<Event extends keyof AudioRecorderEvents>(
-    event: Event,
-    listener: AudioRecorderEvents[Event]
-  ): this {
-    super.off(event, listener);
-    return this;
-  }
 }

@@ -23,6 +23,12 @@ const contextRegistry = new Map<string, AudioContext>();
 export const audioContext: (
   options?: GetAudioContextOptions,
 ) => Promise<AudioContext> = (() => {
+  if (typeof window === 'undefined') {
+    return async () => {
+      throw new Error('audioContext can only be used in a browser environment');
+    };
+  }
+
   const didInteract = new Promise<void>((resolve) => {
     const handleInteraction = () => {
       window.removeEventListener('pointerdown', handleInteraction);
