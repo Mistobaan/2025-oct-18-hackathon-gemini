@@ -27,7 +27,7 @@ import "./control-tray.scss";
 import SettingsDialog from "../settings-dialog/SettingsDialog";
 
 export type ControlTrayProps = {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   children?: ReactNode;
   supportsVideo: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;
