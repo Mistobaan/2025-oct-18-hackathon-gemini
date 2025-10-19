@@ -1,114 +1,124 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+'use client';
 
-// Placeholder for the actual client, which I will create later.
-class GenAILiveClient extends EventTarget {
-  constructor(options: any) {
-    super();
-  }
-  connect(model: string, config: any): Promise<void> {
-    console.log('Connecting with model:', model, 'and config:', config);
-    // Simulate connection
-    setTimeout(() => this.dispatchEvent(new Event('open')), 500);
-    return Promise.resolve();
-  }
-  disconnect() {
-    console.log('Disconnecting...');
-    this.dispatchEvent(new Event('close'));
-  }
-  send(data: any) {
-    // This will send audio data over the websocket
-  }
-}
+import { useCallback, useMemo, useRef, useState } from 'react';
 
-// Placeholder types
-type LiveClientOptions = { apiKey: string };
-type LiveConnectConfig = any;
-
-export type UseGeminiLiveResults = {
-  client: GenAILiveClient;
-  connected: boolean;
-  connect: (config: LiveConnectConfig) => Promise<void>;
-  disconnect: () => Promise<void>;
-  sendAudio: (audio: Blob) => void;
-  transcript: string;
+export type LiveAnalysisState = {
+  analysis: string;
+  loading: boolean;
+  error: string | null;
+  snapshot: TabSnapshot | null;
+  runAnalysis: (latex: string) => Promise<void>;
+  reset: () => void;
 };
 
-export function useGeminiLive(options: LiveClientOptions): UseGeminiLiveResults {
-  const client = useMemo(() => new GenAILiveClient(options), [options]);
-  const [connected, setConnected] = useState(false);
-  const [transcript, setTranscript] = useState('');
+export type TabSnapshot = {
+  title: string;
+  url: string;
+  html: string;
+  scrollPosition: number;
+};
 
-  useEffect(() => {
-    const onOpen = () => setConnected(true);
-    const onClose = () => setConnected(false);
-    const onError = (error: any) => console.error('Gemini Live Error:', error);
-    const onTranscript = (event: any) => {
-      // In a real scenario, the event would contain transcript data.
-      // For now, we'll simulate it.
-      setTranscript(event.detail.transcript);
-    };
+const STREAM_FALLBACK_MESSAGE = 'Gemini Live is preparing insights…';
 
-    client.addEventListener('open', onOpen);
-    client.addEventListener('close', onClose);
-    client.addEventListener('error', onError);
-    client.addEventListener('transcript', onTranscript); // Custom event for transcripts
-
-    return () => {
-      client.removeEventListener('open', onOpen);
-      client.removeEventListener('close', onClose);
-      client.removeEventListener('error', onError);
-      client.removeEventListener('transcript', onTranscript);
-      client.disconnect();
-    };
-  }, [client]);
-
-  const connect = useCallback(
-    async (config: LiveConnectConfig) => {
-      const model = 'models/gemini-live'; // Or any other suitable model
-      await client.connect(model, config);
-    },
-    [client]
-  );
-
-  const disconnect = useCallback(async () => {
-    client.disconnect();
-  }, [client]);
-
-  const sendAudio = useCallback(
-    (audio: Blob) => {
-      if (connected) {
-        client.send(audio);
-      }
-    },
-    [client, connected]
-  );
-
-  // Simulate receiving a transcript for demonstration
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (connected) {
-      const words = ['The', 'quick', 'brown', 'fox', 'jumps', 'over', 'the', 'lazy', 'dog'];
-      let i = 0;
-      interval = setInterval(() => {
-        if (i < words.length) {
-          const event = new CustomEvent('transcript', { detail: { transcript: words.slice(0, i + 1).join(' ') } });
-          client.dispatchEvent(event);
-          i++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [connected, client]);
-
-
+const createSnapshot = (): TabSnapshot => {
+  if (typeof document === 'undefined') {
+    return { title: '', url: '', html: '', scrollPosition: 0 };
+  }
   return {
-    client,
-    connected,
-    connect,
-    disconnect,
-    sendAudio,
-    transcript,
+    title: document.title,
+    url: window.location.href,
+    html: new XMLSerializer().serializeToString(document.documentElement),
+    scrollPosition: window.scrollY,
   };
+};
+
+export function useGeminiLive(): LiveAnalysisState {
+  const [analysis, setAnalysis] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<TabSnapshot | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const reset = useCallback(() => {
+    setAnalysis('');
+    setError(null);
+    setSnapshot(null);
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, []);
+
+  const runAnalysis = useCallback(async (latex: string) => {
+    if (!latex.trim()) {
+      setError('No LaTeX provided for analysis.');
+      return;
+    }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+    setAnalysis('');
+
+    const tabSnapshot = createSnapshot();
+    setSnapshot(tabSnapshot);
+
+    try {
+      const response = await fetch('/api/live/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latex, snapshot: tabSnapshot }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to run Gemini Live analysis.');
+      }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (contentType.includes('application/json')) {
+        const { analysis: result } = await response.json();
+        setAnalysis(result ?? '');
+        return;
+      }
+
+      if (!response.body) {
+        setAnalysis('Gemini Live did not return any content.');
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assembled = '';
+      setAnalysis(STREAM_FALLBACK_MESSAGE);
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        assembled += chunk;
+        setAnalysis(assembled);
+      }
+
+      if (!assembled.trim()) {
+        setAnalysis('Gemini Live did not return any content.');
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        return;
+      }
+      console.error('Gemini Live analysis error', err);
+      setError((err as Error).message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
+      abortRef.current = null;
+    }
+  }, []);
+
+  return useMemo(
+    () => ({ analysis, loading, error, snapshot, runAnalysis, reset }),
+    [analysis, loading, error, snapshot, runAnalysis, reset],
+  );
 }
