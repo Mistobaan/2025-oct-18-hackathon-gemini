@@ -24,8 +24,14 @@ export const audioContext: (
   options?: GetAudioContextOptions,
 ) => Promise<AudioContext> = (() => {
   const didInteract = new Promise<void>((resolve) => {
-    window.addEventListener('pointerdown', resolve, { once: true });
-    window.addEventListener('keydown', resolve, { once: true });
+    const handleInteraction = () => {
+      window.removeEventListener('pointerdown', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+      resolve();
+    };
+
+    window.addEventListener('pointerdown', handleInteraction, { once: true });
+    window.addEventListener('keydown', handleInteraction, { once: true });
   });
 
   return async (options?: GetAudioContextOptions) => {
