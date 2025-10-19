@@ -110,6 +110,7 @@ function App() {
     setSymbolResults(initialResults);
 
     let encounteredError = false;
+    let lastErrorMessage: string | null = null;
 
     try {
       for (let index = 0; index < capture.symbolDataUrls.length; index += 1) {
@@ -151,6 +152,10 @@ function App() {
         } catch (error) {
           console.error("Failed to transcribe symbol", error);
           encounteredError = true;
+          if (!lastErrorMessage) {
+            lastErrorMessage =
+              error instanceof Error ? error.message : "Unknown transcription error";
+          }
           if (extractionTaskRef.current !== taskId) {
             return;
           }
@@ -171,7 +176,9 @@ function App() {
 
       if (encounteredError) {
         setSymbolError(
-          "Some symbols could not be transcribed. Try capturing the frame again for a clearer result."
+          lastErrorMessage
+            ? `Some symbols could not be transcribed (${lastErrorMessage}). Try capturing the frame again.`
+            : "Some symbols could not be transcribed. Try capturing the frame again for a clearer result."
         );
       }
     } finally {
