@@ -103,20 +103,6 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
     this.onmessage = this.onmessage.bind(this);
   }
 
-  override on<Event extends keyof LiveClientEventTypes>(
-    event: Event,
-    listener: LiveClientEventTypes[Event]
-  ): this {
-    return super.on(event, listener);
-  }
-
-  override off<Event extends keyof LiveClientEventTypes>(
-    event: Event,
-    listener: LiveClientEventTypes[Event]
-  ): this {
-    return super.off(event, listener);
-  }
-
   protected log(type: string, message: StreamingLog["message"]) {
     const log: StreamingLog = {
       date: new Date(),

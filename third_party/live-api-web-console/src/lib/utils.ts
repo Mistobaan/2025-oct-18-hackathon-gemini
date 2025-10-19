@@ -23,9 +23,18 @@ const map: Map<string, AudioContext> = new Map();
 export const audioContext: (
   options?: GetAudioContextOptions
 ) => Promise<AudioContext> = (() => {
-  const didInteract = new Promise((res) => {
-    window.addEventListener("pointerdown", res, { once: true });
-    window.addEventListener("keydown", res, { once: true });
+  if (typeof window === "undefined") {
+    return async () => {
+      throw new Error("audioContext can only be used in a browser environment");
+    };
+  }
+
+  const didInteract = new Promise<void>((res) => {
+    const resolveInteraction = () => res();
+    window.addEventListener("pointerdown", resolveInteraction, {
+      once: true,
+    });
+    window.addEventListener("keydown", resolveInteraction, { once: true });
   });
 
   return async (options?: GetAudioContextOptions) => {
