@@ -160,8 +160,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onLatexRecognized, onSnap
   }, []);
 
   return (
-    <div className="w-full">
-      <div className="relative w-full aspect-[3/2] rounded-xl border border-slate-700 bg-slate-900 shadow-lg overflow-hidden">
+    <div className="flex h-full w-full flex-col">
+      <div className="relative flex-1 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
         <canvas
           ref={canvasRef}
           className="size-full cursor-crosshair touch-none"
@@ -175,17 +175,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onLatexRecognized, onSnap
           onPointerCancel={endStroke}
         />
         {isRecognizing && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-slate-950/70 py-2 text-center text-xs uppercase tracking-[0.2em] text-slate-200">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-slate-950/70 py-3 text-center text-xs uppercase tracking-[0.28em] text-slate-200">
             Recognizing…
           </div>
         )}
       </div>
-      <div className="mt-3 flex items-center justify-between text-sm text-slate-300">
-        <span>{hasDrawing ? 'Release to recognize automatically.' : 'Draw your equation below.'}</span>
+      <div className="mt-4 flex items-center justify-between text-xs uppercase tracking-[0.28em] text-slate-400">
+        <span className="text-[0.65rem] sm:text-[0.7rem]">
+          {hasDrawing ? 'Release to recognize automatically.' : 'Draw your equation below.'}
+        </span>
         <button
           type="button"
           onClick={clearCanvas}
-          className="rounded-md border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:bg-slate-800"
+          className="rounded-full border border-slate-600 px-4 py-2 text-[0.65rem] font-semibold tracking-[0.3em] text-slate-100 transition hover:bg-slate-800"
         >
           Clear Canvas
         </button>
