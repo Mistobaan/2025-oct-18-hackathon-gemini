@@ -36,7 +36,7 @@ import { AudioRecorder } from '../lib/audio-recorder';
 import { AudioPulse } from './audio-pulse';
 
 export type ControlTrayProps = {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   children?: ReactNode;
   supportsVideo: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;

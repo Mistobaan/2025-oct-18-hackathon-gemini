@@ -14,7 +14,7 @@ type GeminiLiveConsoleProps = {
 
 export function GeminiLiveConsole({ apiKey, className }: GeminiLiveConsoleProps) {
   const resolvedApiKey = apiKey ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
 
   const options = useMemo<LiveClientOptions | null>(() => {
