@@ -1,103 +1,102 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useMemo } from 'react';
+import DrawingCanvas from '@/components/drawing-canvas';
+import SpeechRecognition from '@/components/speech-recognition';
+
+const Step: React.FC<{ number: number; title: string; active: boolean; children: React.ReactNode }> = ({ number, title, active, children }) => (
+  <div className={`p-4 border rounded-lg ${active ? 'border-blue-500' : 'border-gray-300'}`}>
+    <h2 className={`text-xl font-bold ${active ? 'text-blue-600' : 'text-gray-500'}`}>Step {number}: {title}</h2>
+    <div className="mt-4">{children}</div>
+  </div>
+);
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [transcript, setTranscript] = useState('');
+  const [latex, setLatex] = useState('');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRecognized, setIsRecognized] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleLatexRecognized = (recognizedLatex: string) => {
+    setLatex(recognizedLatex);
+    setIsRecognized(true);
+  };
+
+  const handleGenerateVideo = async () => {
+    if (!latex) {
+      alert("Please recognize an equation first.");
+      return;
+    }
+    setIsGenerating(true);
+    setVideoUrl(null);
+    try {
+      const response = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latex, explanations: transcript }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate video.');
+      }
+
+      const videoBlob = await response.blob();
+      const url = URL.createObjectURL(videoBlob);
+      setVideoUrl(url);
+    } catch (error) {
+      console.error(error);
+      alert((error as Error).message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const currentStep = useMemo(() => {
+    if (!isRecognized) return 1;
+    if (!transcript) return 2;
+    return 3;
+  }, [isRecognized, transcript]);
+
+  return (
+    <main className="flex min-h-screen flex-col items-center p-8 gap-8 bg-gray-50">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold">Multimodal MCP</h1>
+        <p className="text-xl text-muted-foreground mt-2">
+          Draw, Recognize, Speak, and Animate your Math.
+        </p>
+      </div>
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="flex flex-col gap-8">
+          <Step number={1} title="Draw & Recognize" active={currentStep === 1}>
+            <DrawingCanvas transcript={transcript} onLatexRecognized={handleLatexRecognized} />
+          </Step>
+          <Step number={2} title="Explain the Equation" active={currentStep === 2}>
+            <SpeechRecognition onTranscriptUpdate={setTranscript} disabled={!isRecognized} />
+          </Step>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <div className="flex flex-col gap-8">
+          <Step number={3} title="Generate Video" active={currentStep === 3}>
+            <button
+              onClick={handleGenerateVideo}
+              disabled={isGenerating || !transcript}
+              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 text-lg font-semibold"
+            >
+              {isGenerating ? 'Generating Video...' : 'Generate Video Explanation'}
+            </button>
+            <div className="w-full aspect-video bg-black rounded-lg flex items-center justify-center mt-4">
+              {videoUrl ? (
+                <video src={videoUrl} controls autoPlay className="w-full h-full rounded-lg" />
+              ) : (
+                <p className="text-white">
+                  {isGenerating ? 'Rendering...' : 'Video will appear here'}
+                </p>
+              )}
+            </div>
+          </Step>
+        </div>
+      </div>
+    </main>
   );
 }

@@ -1,0 +1,2 @@
+daytona
+google-generativeai
